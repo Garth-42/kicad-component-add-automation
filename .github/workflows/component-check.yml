@@ -1,0 +1,104 @@
+name: Component Check
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "components/**/component.yaml"
+      - "tests/fixtures/*.yaml"
+      - "src/**"
+      - "pyproject.toml"
+      - ".github/workflows/component-check.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "components/**/component.yaml"
+      - "tests/fixtures/*.yaml"
+      - "src/**"
+      - "pyproject.toml"
+      - ".github/workflows/component-check.yml"
+
+jobs:
+  component-check:
+    name: deterministic component generation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Determine component specs to check
+        id: specs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_ref="origin/${{ github.base_ref }}"
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            git diff --name-only "$base_ref...HEAD" \
+              | grep -E '(^components/.*/component\.yaml$|^tests/fixtures/.*\.yaml$)' \
+              | sort -u > changed-specs.txt || true
+          else
+            git ls-files 'components/**/component.yaml' 'tests/fixtures/*.yaml' > changed-specs.txt
+          fi
+
+          if [[ ! -s changed-specs.txt ]]; then
+            # Keep the workflow useful on early repository changes before real components exist.
+            printf 'tests/fixtures/terminal_block.yaml\n' > changed-specs.txt
+          fi
+
+          cat changed-specs.txt
+
+      - name: Validate component specs
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          while IFS= read -r spec; do
+            [[ -z "$spec" ]] && continue
+            python -m kcf.cli.main validate "$spec"
+          done < changed-specs.txt
+
+      - name: Generate component artifacts
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          rm -rf .kcf-ci/generated
+          mkdir -p .kcf-ci/generated
+          while IFS= read -r spec; do
+            [[ -z "$spec" ]] && continue
+            python -m kcf.cli.main generate "$spec" --output-root .kcf-ci/generated
+          done < changed-specs.txt
+
+      - name: Check deterministic regeneration
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          while IFS= read -r spec; do
+            [[ -z "$spec" ]] && continue
+            python -m kcf.cli.main check "$spec" --output-root .kcf-ci/generated
+          done < changed-specs.txt
+
+      - name: Upload generated review artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kcf-generated-review-artifacts
+          path: .kcf-ci/generated/**/review/**
+          if-no-files-found: warn
