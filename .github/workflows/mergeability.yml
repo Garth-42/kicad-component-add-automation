@@ -1,0 +1,27 @@
+name: Mergeability Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  mergeability:
+    name: verify PR branch merges with base
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pull request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Fetch base branch
+        run: git fetch origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" --depth=1
+
+      - name: Attempt conflict-free merge
+        run: |
+          set -euo pipefail
+          git config user.name "kcf-mergeability-check"
+          git config user.email "kcf-mergeability-check@example.invalid"
+          git merge --no-commit --no-ff "origin/${{ github.base_ref }}"
