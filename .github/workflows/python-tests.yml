@@ -1,0 +1,59 @@
+name: Python Tests
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/python-tests.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/python-tests.yml"
+
+jobs:
+  test:
+    name: pytest / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+
+      - name: Run unit tests
+        env:
+          PYTHONPATH: src
+        run: pytest -q
+
+      - name: Validate fixture through CLI
+        env:
+          PYTHONPATH: src
+        run: python -m kcf.cli.main validate tests/fixtures/terminal_block.yaml
+
+      - name: Generate and check fixture artifacts
+        env:
+          PYTHONPATH: src
+        run: |
+          output_root="$(mktemp -d)"
+          python -m kcf.cli.main generate tests/fixtures/terminal_block.yaml --output-root "$output_root"
+          python -m kcf.cli.main check tests/fixtures/terminal_block.yaml --output-root "$output_root"
