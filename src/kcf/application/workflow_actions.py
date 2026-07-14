@@ -44,7 +44,17 @@ def approve_spec(store: WorkflowJobStore, job_id: str, spec_hash: str, actor: st
     _require_hash_match("spec", job.spec_hash, spec_hash)
     now = _now()
     updated = _append_approval_event(
-        replace(job, state=WorkflowState.SPEC_APPROVED, spec_hash=spec_hash, updated_at=now),
+        replace(
+            job,
+            state=WorkflowState.SPEC_APPROVED,
+            spec_hash=spec_hash,
+            candidate_hash=None,
+            approved_source_manifest_hash=job.source_manifest_hash,
+            approved_generator_version=job.generator_version,
+            approved_style_policy_hash=job.style_policy_hash,
+            invalidation_reasons=[],
+            updated_at=now,
+        ),
         scope=ApprovalScope.SPECIFICATION,
         subject_hash=spec_hash,
         subject_hash_type="spec_hash",
@@ -59,6 +69,9 @@ def approve_spec(store: WorkflowJobStore, job_id: str, spec_hash: str, actor: st
 
 def approve_release(store: WorkflowJobStore, job_id: str, candidate_hash: str, actor: str) -> WorkflowJob:
     job = _require_job(store, job_id)
+    stale_reasons = stale_approval_reasons(job)
+    if stale_reasons:
+        raise WorkflowActionError("release approval requires spec re-approval: " + "; ".join(stale_reasons))
     _require_hash_match("candidate", job.candidate_hash, candidate_hash)
     now = _now()
     updated = _append_approval_event(
@@ -74,6 +87,47 @@ def approve_release(store: WorkflowJobStore, job_id: str, candidate_hash: str, a
     store.save_job(updated)
     return updated
 
+
+
+def reconcile_stale_approvals(store: WorkflowJobStore, job_id: str, actor: str = "kcf") -> WorkflowJob:
+    job = _require_job(store, job_id)
+    reasons = stale_approval_reasons(job)
+    if not reasons:
+        return job
+    now = _now()
+    retained_approvals = [approval for approval in job.approvals if approval.scope != ApprovalScope.RELEASE_CANDIDATE]
+    updated = _append_event(
+        replace(
+            job,
+            state=WorkflowState.CHANGES_REQUESTED,
+            candidate_hash=None,
+            invalidation_reasons=reasons,
+            approvals=retained_approvals,
+            updated_at=now,
+        ),
+        "WORKFLOW_INVALIDATED",
+        actor,
+        "Invalidated downstream workflow state because approved inputs changed.",
+        {"reasons": reasons},
+        now,
+    )
+    store.save_job(updated)
+    return updated
+
+
+def stale_approval_reasons(job: WorkflowJob) -> list[str]:
+    if job.state not in {WorkflowState.SPEC_APPROVED, WorkflowState.CANDIDATE_GENERATED, WorkflowState.RELEASED}:
+        return []
+    comparisons = (
+        ("source_manifest_hash", job.source_manifest_hash, job.approved_source_manifest_hash),
+        ("generator_version", job.generator_version, job.approved_generator_version),
+        ("style_policy_hash", job.style_policy_hash, job.approved_style_policy_hash),
+    )
+    reasons = []
+    for name, current, approved in comparisons:
+        if approved is not None and current != approved:
+            reasons.append(f"{name} changed from {approved} to {current or 'unset'}")
+    return reasons
 
 def reject_candidate(store: WorkflowJobStore, job_id: str, candidate_hash: str, actor: str, reason: str) -> WorkflowJob:
     job = _require_job(store, job_id)
@@ -160,7 +214,7 @@ def _append_event(
     event_type: str,
     actor: str,
     message: str,
-    data: dict[str, str],
+    data: dict[str, object],
     timestamp: str,
 ) -> WorkflowJob:
     event = WorkflowEvent(

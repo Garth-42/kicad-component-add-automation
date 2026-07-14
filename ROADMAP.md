@@ -9,7 +9,7 @@ This roadmap converts the architecture baseline into an implementation sequence.
 - Private component-library repositories can be bootstrapped with safe `.kcf` templates, `.env.example`, default local-secret ignore rules, and doctor checks for obvious committed secret patterns.
 - Deterministic artifact generation covers a first terminal-block example, including KiCad library files, a test project, SVG review artifacts, and a validation report.
 - Review bundles include symbol, footprint, footprint-layer, validation-report, and optional 3D-model association renders.
-- Workflow review commands can answer questions, approve specifications, reject candidates, request changes, and approve releases with hash-bound decisions and dedicated approval records.
+- Workflow review commands can answer questions, approve specifications, reject candidates, request changes, approve releases, and reconcile stale approvals with hash-bound decisions and dedicated approval records.
 - Unit tests cover schema loading, validation failures, artifact generation, and CLI drift checking.
 
 ## Phase 1: Harden the deterministic core
@@ -80,4 +80,4 @@ This roadmap converts the architecture baseline into an implementation sequence.
 
 ## Near-term recommended next issue
 
-Invalidate downstream workflow states when sources, approved specs, generator versions, or style policies change, using persisted approval records and immutable events as the audit baseline.
+Add source manifests with SHA-256 hashes, source-retention modes, document revision fields, retrieval dates, and external-reference handling.
