@@ -5,7 +5,8 @@ import json
 import shutil
 from pathlib import Path
 
-from kcf.domain.component import ComponentSpec
+from kcf.application.bootstrap import doctor_findings, init_private_library
+from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
 from kcf.generation.artifacts import artifact_map, write_artifacts
 from kcf.validation.core import validate_component
@@ -14,7 +15,11 @@ from kcf.validation.core import validate_component
 def run(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="kcf", description="KiCad Component Factory")
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor")
+    doctor_p = sub.add_parser("doctor")
+    doctor_p.add_argument("--repo-root", type=Path, default=Path("."))
+    init_p = sub.add_parser("init-library")
+    init_p.add_argument("path", type=Path)
+    init_p.add_argument("--private", action="store_true", dest="private", help="Initialize a secret-safe private component library repository")
     schema_p = sub.add_parser("schema")
     schema_p.add_argument("--output", "-o", type=Path)
     val_p = sub.add_parser("validate")
@@ -30,9 +35,21 @@ def run(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         print("KCF doctor")
         print(f"KiCad CLI: {shutil.which('kicad-cli') or 'not found'}")
+        findings = doctor_findings(args.repo_root)
+        for finding in findings:
+            print(f"{finding.severity}: {finding.message}")
+        return 1 if any(finding.severity == "error" for finding in findings) else 0
+    if args.command == "init-library":
+        if not args.private:
+            parser.error("init-library currently requires --private")
+        result = init_private_library(args.path)
+        print(f"initialized private library at {result.root}")
+        print(f"created {len(result.created)} paths")
+        if result.skipped:
+            print(f"skipped {len(result.skipped)} existing files")
         return 0
     if args.command == "schema":
-        text = json.dumps({"title": "ComponentSpec", "schema_version": "1.0"}, indent=2) + "\n"
+        text = dump_component_schema()
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(text, encoding="utf-8")
