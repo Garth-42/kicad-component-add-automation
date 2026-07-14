@@ -1,7 +1,6 @@
 name: Component Check
 
 on:
-  workflow_dispatch:
   pull_request:
     paths:
       - "components/**/component.yaml"
