@@ -1,0 +1,172 @@
+from __future__ import annotations
+
+import json
+from copy import deepcopy
+from typing import Any
+
+SCHEMA_VERSION = "1.0"
+
+_DECIMAL_SCHEMA: dict[str, Any] = {
+    "oneOf": [
+        {"type": "string", "pattern": r"^-?\\d+(?:\\.\\d+)?$"},
+        {"type": "number"},
+    ]
+}
+
+COMPONENT_SCHEMA: dict[str, Any] = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://kicad-component-factory.local/schemas/component.schema.json",
+    "title": "KiCad Component Factory Component Specification",
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["schema_version", "component_key", "identity", "classification", "symbol", "footprint"],
+    "properties": {
+        "schema_version": {"type": "string", "const": SCHEMA_VERSION},
+        "component_key": {"type": "string", "pattern": "^[a-z0-9-]+$"},
+        "identity": {"$ref": "#/$defs/identity"},
+        "classification": {"$ref": "#/$defs/classification"},
+        "symbol": {"$ref": "#/$defs/symbol"},
+        "footprint": {"$ref": "#/$defs/footprint"},
+        "model_3d": {"$ref": "#/$defs/model_3d"},
+        "sources": {"type": "array", "items": {"type": "object", "additionalProperties": {"type": "string"}}},
+        "evidence": {"type": "object"},
+        "assumptions": {"type": "array", "items": {"$ref": "#/$defs/assumption"}},
+        "policies": {"type": "object", "additionalProperties": {"type": "string"}},
+        "release_constraints": {"$ref": "#/$defs/release_constraints"},
+    },
+    "$defs": {
+        "decimal": _DECIMAL_SCHEMA,
+        "identity": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["manufacturer", "manufacturer_part_number", "library_name", "symbol_name", "footprint_name", "description"],
+            "properties": {
+                "manufacturer": {"type": "string", "minLength": 1},
+                "manufacturer_part_number": {"type": "string", "minLength": 1},
+                "library_name": {"type": "string", "minLength": 1},
+                "symbol_name": {"type": "string", "minLength": 1},
+                "footprint_name": {"type": "string", "minLength": 1},
+                "description": {"type": "string", "minLength": 1},
+                "datasheet_description": {"type": "string"},
+                "keywords": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+        "classification": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["family"],
+            "properties": {
+                "family": {"type": "string", "minLength": 1},
+                "risk_level": {"type": "string", "enum": ["low", "medium", "high"], "default": "medium"},
+                "safety_related": {"type": "boolean", "default": False},
+                "mains_rated": {"type": "boolean", "default": False},
+            },
+        },
+        "symbol": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["reference_prefix", "body", "pins"],
+            "properties": {
+                "reference_prefix": {"type": "string", "minLength": 1},
+                "representation": {"type": "string", "default": "single_unit"},
+                "body": {"$ref": "#/$defs/symbol_body"},
+                "pins": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/symbol_pin"}},
+            },
+        },
+        "symbol_body": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["width_grid_units", "height_grid_units"],
+            "properties": {
+                "width_grid_units": {"type": "integer", "minimum": 1},
+                "height_grid_units": {"type": "integer", "minimum": 1},
+            },
+        },
+        "symbol_pin": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["number", "name"],
+            "properties": {
+                "number": {"type": "string", "minLength": 1},
+                "name": {"type": "string"},
+                "electrical_type": {"type": "string", "default": "passive"},
+                "orientation": {"type": "string", "default": "right"},
+                "group": {"type": "string"},
+            },
+        },
+        "footprint": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["technology", "body", "pads", "courtyard"],
+            "properties": {
+                "technology": {"type": "string", "minLength": 1},
+                "origin_strategy": {"type": "string", "default": "pad_1"},
+                "pitch_mm": {"$ref": "#/$defs/decimal"},
+                "body": {"$ref": "#/$defs/footprint_body"},
+                "pads": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/footprint_pad"}},
+                "courtyard": {"$ref": "#/$defs/courtyard"},
+            },
+        },
+        "footprint_body": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["width_mm", "depth_mm"],
+            "properties": {"width_mm": {"$ref": "#/$defs/decimal"}, "depth_mm": {"$ref": "#/$defs/decimal"}, "height_mm": {"$ref": "#/$defs/decimal"}},
+        },
+        "footprint_pad": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["number", "x_mm", "y_mm", "shape", "size_x_mm", "size_y_mm"],
+            "properties": {
+                "number": {"type": "string", "minLength": 1},
+                "x_mm": {"$ref": "#/$defs/decimal"},
+                "y_mm": {"$ref": "#/$defs/decimal"},
+                "shape": {"type": "string", "enum": ["rect", "circle", "oval"]},
+                "size_x_mm": {"$ref": "#/$defs/decimal"},
+                "size_y_mm": {"$ref": "#/$defs/decimal"},
+                "drill_mm": {"$ref": "#/$defs/decimal"},
+            },
+        },
+        "courtyard": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["clearance_mm"],
+            "properties": {"method": {"type": "string", "default": "body_plus_clearance"}, "clearance_mm": {"$ref": "#/$defs/decimal"}},
+        },
+        "model_3d": {
+            "type": "object",
+            "additionalProperties": True,
+            "properties": {"status": {"type": "string", "default": "unknown"}, "path": {"type": "string"}},
+        },
+        "assumption": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["assumption_id", "field", "value", "reason"],
+            "properties": {
+                "assumption_id": {"type": "string", "minLength": 1},
+                "field": {"type": "string", "minLength": 1},
+                "value": {"type": "string"},
+                "reason": {"type": "string", "minLength": 1},
+                "unit": {"type": "string"},
+                "approved_by": {"type": "string"},
+                "approval_required": {"type": "boolean", "default": True},
+            },
+        },
+        "release_constraints": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "required_human_roles": {"type": "array", "items": {"type": "string"}},
+                "block_on_warning_codes": {"type": "array", "items": {"type": "string"}},
+            },
+        },
+    },
+}
+
+
+def component_schema() -> dict[str, Any]:
+    return deepcopy(COMPONENT_SCHEMA)
+
+
+def dump_component_schema() -> str:
+    return json.dumps(component_schema(), indent=2, sort_keys=False) + "\n"
