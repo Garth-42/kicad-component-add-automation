@@ -16,31 +16,3 @@ kcf validate tests/fixtures/terminal_block.yaml
 kcf generate tests/fixtures/terminal_block.yaml --output-root build/example
 kcf check tests/fixtures/terminal_block.yaml --output-root build/example
 ```
-
-## GitHub runner workflow for uploaded YAML
-
-This repository includes two GitHub Actions workflows:
-
-- **Python Tests** (`.github/workflows/python-tests.yml`) runs the unit tests and a CLI smoke test.
-- **Component Check** (`.github/workflows/component-check.yml`) runs deterministic component checks when a component YAML file changes.
-
-To make a YAML upload run on GitHub runners:
-
-1. Commit these workflow files to the default branch.
-2. Add a component spec at `components/<manufacturer>/<part>/component.yaml` in a branch or pull request.
-3. Push the branch or open the pull request.
-4. GitHub Actions will run **Component Check**, which validates the YAML, generates artifacts into `.kcf-ci/generated`, checks deterministic regeneration, and uploads review artifacts.
-
-The workflow also watches `tests/fixtures/*.yaml` so the included fixture can exercise CI before real component files exist.
-
-## Avoiding pull-request merge conflicts
-
-Before pushing a component branch, update it from the default branch and run the local checks:
-
-```bash
-git fetch origin main
-git rebase origin/main
-pytest -q
-```
-
-The **Mergeability Check** workflow (`.github/workflows/mergeability.yml`) also runs on pull requests and attempts a no-commit merge against the PR base branch. If it fails, rebase the branch on the latest `main`, resolve conflicts locally, rerun tests, and push the resolved branch.
