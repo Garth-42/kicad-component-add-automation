@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 from kcf.application.bootstrap import doctor_findings, init_private_library
+from kcf.application.workflow_status import JsonWorkflowJobStore, format_status_table, workflow_statuses
 from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
 from kcf.generation.artifacts import artifact_map, write_artifacts
@@ -30,6 +31,12 @@ def run(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser("check")
     check_p.add_argument("spec_path", type=Path)
     check_p.add_argument("--output-root", type=Path, default=Path("."))
+    jobs_p = sub.add_parser("jobs")
+    jobs_sub = jobs_p.add_subparsers(dest="jobs_command", required=True)
+    status_p = jobs_sub.add_parser("status")
+    status_p.add_argument("job_id", nargs="?")
+    status_p.add_argument("--repo-root", type=Path, default=Path("."))
+    status_p.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args(argv)
 
     if args.command == "doctor":
@@ -84,6 +91,13 @@ def run(argv: list[str] | None = None) -> int:
             return 1
         print("passed")
         return 0
+    if args.command == "jobs" and args.jobs_command == "status":
+        statuses = workflow_statuses(JsonWorkflowJobStore(args.repo_root), args.job_id)
+        if args.json_output:
+            print(json.dumps([status.to_dict() for status in statuses], indent=2))
+        else:
+            print(format_status_table(statuses))
+        return 1 if args.job_id and not statuses else 0
     return 2
 
 
