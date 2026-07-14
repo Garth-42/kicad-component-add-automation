@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+import re
 from typing import Any
 
 
@@ -180,6 +181,38 @@ class ReleaseConstraints:
         return cls(**(data or {}))
 
 
+_SOURCE_RETENTION_MODES = {"embedded", "external_reference", "restricted", "local_only"}
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+@dataclass
+class SourceDocument:
+    source_id: str
+    title: str
+    kind: str
+    sha256: str
+    retention_mode: str
+    document_revision: str | None = None
+    retrieval_date: str | None = None
+    uri: str | None = None
+    external_reference: str | None = None
+    local_path: str | None = None
+    notes: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SourceDocument:
+        require_keys(data, ["source_id", "title", "kind", "sha256", "retention_mode"], "sources[]")
+        source = cls(**data)
+        if source.retention_mode not in _SOURCE_RETENTION_MODES:
+            raise ComponentValidationError("sources[].retention_mode must be embedded, external_reference, restricted, or local_only")
+        if not _SHA256_RE.fullmatch(source.sha256):
+            raise ComponentValidationError("sources[].sha256 must be a lowercase 64-character SHA-256 hex digest")
+        if source.retrieval_date is not None and not _DATE_RE.fullmatch(source.retrieval_date):
+            raise ComponentValidationError("sources[].retrieval_date must use YYYY-MM-DD format")
+        return source
+
+
 @dataclass
 class ComponentSpec:
     schema_version: str
@@ -189,7 +222,7 @@ class ComponentSpec:
     symbol: SymbolSpec
     footprint: FootprintSpec
     model_3d: Model3D = field(default_factory=Model3D)
-    sources: list[dict[str, str]] = field(default_factory=list)
+    sources: list[SourceDocument] = field(default_factory=list)
     evidence: dict[str, Any] = field(default_factory=dict)
     assumptions: list[Assumption] = field(default_factory=list)
     policies: dict[str, str] = field(default_factory=dict)
@@ -202,5 +235,16 @@ class ComponentSpec:
         if any(ch for ch in key if not (ch.islower() or ch.isdigit() or ch == "-")):
             raise ComponentValidationError("component_key must be a lowercase slug")
         return cls(
-            data["schema_version"], key, Identity.from_dict(data["identity"]), Classification.from_dict(data["classification"]), SymbolSpec.from_dict(data["symbol"]), FootprintSpec.from_dict(data["footprint"]), Model3D.from_dict(data.get("model_3d")), data.get("sources", []), data.get("evidence", {}), [Assumption.from_dict(item) for item in data.get("assumptions", [])], data.get("policies", {}), ReleaseConstraints.from_dict(data.get("release_constraints")),
+            data["schema_version"],
+            key,
+            Identity.from_dict(data["identity"]),
+            Classification.from_dict(data["classification"]),
+            SymbolSpec.from_dict(data["symbol"]),
+            FootprintSpec.from_dict(data["footprint"]),
+            Model3D.from_dict(data.get("model_3d")),
+            [SourceDocument.from_dict(item) for item in data.get("sources", [])],
+            data.get("evidence", {}),
+            [Assumption.from_dict(item) for item in data.get("assumptions", [])],
+            data.get("policies", {}),
+            ReleaseConstraints.from_dict(data.get("release_constraints")),
         )

@@ -35,7 +35,18 @@
     "courtyard": {"method": "body_plus_clearance", "clearance_mm": "0.50"}
   },
   "model_3d": {"status": "not_provided"},
-  "sources": [],
+  "sources": [
+    {
+      "source_id": "datasheet",
+      "title": "ABC123-03 terminal block datasheet",
+      "kind": "datasheet",
+      "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "retention_mode": "external_reference",
+      "document_revision": "A",
+      "retrieval_date": "2026-07-14",
+      "uri": "https://example.com/datasheets/abc123-03.pdf"
+    }
+  ],
   "evidence": {"facts": []},
   "assumptions": [],
   "policies": {},
