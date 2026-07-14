@@ -43,7 +43,8 @@ kcf jobs answer-question job-123 q-1 --answer "Pin 1 is square." --actor reviewe
 kcf jobs approve-spec job-123 --spec-hash sha256:... --actor reviewer --repo-root ../my-private-kicad-library
 kcf jobs reject-candidate job-123 --candidate-hash sha256:... --reason "Courtyard too tight." --actor reviewer --repo-root ../my-private-kicad-library
 kcf jobs approve-release job-123 --candidate-hash sha256:... --actor reviewer --repo-root ../my-private-kicad-library
+kcf jobs reconcile job-123 --actor automation --repo-root ../my-private-kicad-library
 ```
 
 Jobs are read from `.kcf/runtime/jobs/*.json` and status output summarizes state, open questions, finding counts, branch, review bundle path, and the next required action.
-Review commands update the same job files with immutable workflow events and require exact specification or candidate hashes for approvals and release decisions. Successful spec and release approvals also persist dedicated approval records with actor, timestamp, approval scope, approved hash, and the event that recorded the decision.
+Review commands update the same job files with immutable workflow events and require exact specification or candidate hashes for approvals and release decisions. Successful spec and release approvals also persist dedicated approval records with actor, timestamp, approval scope, approved hash, and the event that recorded the decision. Specification approvals capture source-manifest, generator-version, and style-policy baselines; `jobs reconcile` invalidates downstream candidate/release state when any approved baseline changes so the part must be re-reviewed before release.

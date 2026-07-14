@@ -198,3 +198,72 @@ def test_workflow_job_round_trips_dedicated_approval_records() -> None:
     assert payload["approvals"][0]["approval_id"] == "approval-1"
     assert payload["approvals"][0]["scope"] == "SPECIFICATION"
     assert payload["approvals"][0]["event_id"] == "event-1"
+
+
+def test_cli_reconcile_invalidates_candidate_when_approved_inputs_change(tmp_path: Path, capsys) -> None:
+    _write_job(
+        tmp_path,
+        {
+            "job_id": "job-9",
+            "component_key": "example-part",
+            "state": "CANDIDATE_GENERATED",
+            "spec_hash": "sha256:spec",
+            "candidate_hash": "sha256:candidate",
+            "source_manifest_hash": "sha256:new-sources",
+            "generator_version": "0.2.0",
+            "style_policy_hash": "sha256:style-a",
+            "approved_source_manifest_hash": "sha256:old-sources",
+            "approved_generator_version": "0.2.0",
+            "approved_style_policy_hash": "sha256:style-a",
+            "approvals": [
+                {
+                    "approval_id": "approval-spec",
+                    "job_id": "job-9",
+                    "scope": "SPECIFICATION",
+                    "actor": "reviewer",
+                    "timestamp": "2026-07-14T00:00:00Z",
+                    "subject_hash": "sha256:spec",
+                    "subject_hash_type": "spec_hash",
+                    "event_id": "event-spec",
+                },
+                {
+                    "approval_id": "approval-release",
+                    "job_id": "job-9",
+                    "scope": "RELEASE_CANDIDATE",
+                    "actor": "reviewer",
+                    "timestamp": "2026-07-14T00:01:00Z",
+                    "subject_hash": "sha256:candidate",
+                    "subject_hash_type": "candidate_hash",
+                    "event_id": "event-release",
+                },
+            ],
+        },
+    )
+
+    assert run(["jobs", "reconcile", "job-9", "--actor", "bot", "--repo-root", str(tmp_path)]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["state"] == "CHANGES_REQUESTED"
+    assert "candidate_hash" not in payload
+    assert payload["invalidation_reasons"] == ["source_manifest_hash changed from sha256:old-sources to sha256:new-sources"]
+    assert payload["events"][-1]["event_type"] == "WORKFLOW_INVALIDATED"
+    assert payload["events"][-1]["actor"] == "bot"
+    assert [approval["scope"] for approval in payload["approvals"]] == ["SPECIFICATION"]
+
+
+def test_cli_approve_release_blocks_stale_approved_inputs(tmp_path: Path, capsys) -> None:
+    _write_job(
+        tmp_path,
+        {
+            "job_id": "job-10",
+            "component_key": "example-part",
+            "state": "CANDIDATE_GENERATED",
+            "candidate_hash": "sha256:candidate",
+            "generator_version": "0.3.0",
+            "approved_generator_version": "0.2.0",
+        },
+    )
+
+    assert run(["jobs", "approve-release", "job-10", "--candidate-hash", "sha256:candidate", "--repo-root", str(tmp_path)]) == 1
+
+    assert "release approval requires spec re-approval" in capsys.readouterr().out
