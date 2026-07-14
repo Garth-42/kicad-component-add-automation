@@ -5,7 +5,8 @@ This roadmap converts the architecture baseline into an implementation sequence.
 ## Current baseline
 
 - Canonical component specs can be loaded from YAML/JSON-like input and validated by domain rules.
-- The CLI supports `doctor`, `schema`, `validate`, `generate`, and `check` commands, with `schema` exporting the committed canonical component JSON Schema.
+- The CLI supports `doctor`, `init-library --private`, `schema`, `validate`, `generate`, and `check` commands, with `schema` exporting the committed canonical component JSON Schema.
+- Private component-library repositories can be bootstrapped with safe `.kcf` templates, `.env.example`, default local-secret ignore rules, and doctor checks for obvious committed secret patterns.
 - Deterministic artifact generation covers a first terminal-block example, including KiCad library files, a test project, SVG review artifacts, and a validation report.
 - Unit tests cover schema loading, validation failures, artifact generation, and CLI drift checking.
 
@@ -20,7 +21,7 @@ This roadmap converts the architecture baseline into an implementation sequence.
 ## Phase 2: Repository workflow and release metadata
 
 1. Implement the recommended component-library repository layout, including `.kcf` policy files, `components/`, `libraries/`, `schemas/`, and `test-projects/` directories.
-2. Add a private-library bootstrap flow, such as `kcf init-library --private`, that creates safe `.kcf` templates, a conservative `.gitignore`, and setup docs without committing credentials.
+2. Expand the private-library bootstrap flow with richer policy templates and optional Git initialization.
 3. Add source manifests with SHA-256 hashes, source-retention modes, document revision fields, retrieval dates, and external-reference handling.
 4. Add review-response retention policies for approval summaries, Slack metadata, full embedded thread exports, external references, and restricted local-only responses.
 5. Generate release manifests that record spec hashes, generator versions, KiCad target versions, validation report hashes, known limitations, approver metadata, and review-retention limitations.
@@ -77,4 +78,4 @@ This roadmap converts the architecture baseline into an implementation sequence.
 
 ## Near-term recommended next issue
 
-Implement the private-library bootstrap and secret-safe configuration baseline. This should add `kcf init-library --private`, safe `.kcf` and `.env` templates, default gitignore rules for local secrets and workflow databases, and `doctor` checks that warn when Slack/model credentials are missing or accidentally placed in committed config.
+Implement the workflow status model and CLI status queries. This should add persisted job/event/status structures, open-question and required-action summaries, and a `kcf jobs status` command that can later power the web UI and Slack `/kcf status` integration.
