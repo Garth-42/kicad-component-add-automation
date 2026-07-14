@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 
 from kcf.application.bootstrap import doctor_findings, init_private_library
-from kcf.application.workflow_actions import WorkflowActionError, answer_question, approve_release, approve_spec, reject_candidate, request_changes
+from kcf.application.workflow_actions import WorkflowActionError, answer_question, approve_release, approve_spec, reconcile_stale_approvals, reject_candidate, request_changes
 from kcf.application.workflow_status import JsonWorkflowJobStore, format_status_table, workflow_statuses
 from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
@@ -65,6 +65,10 @@ def run(argv: list[str] | None = None) -> int:
     changes_p.add_argument("--reason", required=True)
     changes_p.add_argument("--actor", default="local-user")
     changes_p.add_argument("--repo-root", type=Path, default=Path("."))
+    reconcile_p = jobs_sub.add_parser("reconcile")
+    reconcile_p.add_argument("job_id")
+    reconcile_p.add_argument("--actor", default="kcf")
+    reconcile_p.add_argument("--repo-root", type=Path, default=Path("."))
     args = parser.parse_args(argv)
 
     if args.command == "doctor":
@@ -139,6 +143,8 @@ def run(argv: list[str] | None = None) -> int:
                 job = reject_candidate(store, args.job_id, args.candidate_hash, args.actor, args.reason)
             elif args.jobs_command == "request-changes":
                 job = request_changes(store, args.job_id, args.actor, args.reason)
+            elif args.jobs_command == "reconcile":
+                job = reconcile_stale_approvals(store, args.job_id, args.actor)
             else:
                 return 2
         except WorkflowActionError as exc:

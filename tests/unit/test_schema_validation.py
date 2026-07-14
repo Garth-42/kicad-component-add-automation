@@ -52,3 +52,31 @@ def test_component_schema_documents_core_constraints() -> None:
     assert schema["properties"]["component_key"]["pattern"] == "^[a-z0-9-]+$"
     assert schema["$defs"]["classification"]["properties"]["risk_level"]["enum"] == ["low", "medium", "high"]
     assert schema["$defs"]["footprint_pad"]["properties"]["shape"]["enum"] == ["rect", "circle", "oval"]
+
+
+def test_source_manifest_metadata_round_trips_and_validates() -> None:
+    spec = load_component(FIXTURE)
+
+    assert spec.sources[0].source_id == "datasheet"
+    assert spec.sources[0].document_revision == "A"
+    assert spec.sources[0].retrieval_date == "2026-07-14"
+    assert validate_component(spec).passed
+
+
+def test_source_validation_rejects_bad_sha256() -> None:
+    data = component_to_dict(load_component(FIXTURE))
+    data["sources"][0]["sha256"] = "not-a-sha"
+
+    with pytest.raises(ComponentValidationError):
+        ComponentSpec.from_dict(data)
+
+
+def test_source_validation_flags_missing_external_reference() -> None:
+    data = component_to_dict(load_component(FIXTURE))
+    del data["sources"][0]["uri"]
+    spec = ComponentSpec.from_dict(data)
+
+    report = validate_component(spec)
+
+    assert not report.passed
+    assert any(f.code == "SOURCE_REFERENCE_MISSING" for f in report.findings)

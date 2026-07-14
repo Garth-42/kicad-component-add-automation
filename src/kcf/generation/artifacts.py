@@ -6,6 +6,7 @@ from pathlib import Path
 from kcf.domain.component import ComponentSpec
 from kcf.generation.footprint import generate_footprint
 from kcf.generation.project import generate_test_project
+from kcf.generation.source_manifest import render_source_manifest
 from kcf.generation.symbol import generate_symbol_library
 from kcf.rendering.svg import render_footprint_layers_svg, render_footprint_svg, render_model_3d_svg, render_symbol_svg
 from kcf.validation.core import validate_component
@@ -22,6 +23,7 @@ def artifact_map(spec: ComponentSpec) -> dict[str, str]:
         f"{base}/review/footprint.svg": render_footprint_svg(spec),
         f"{base}/review/footprint-layers.svg": render_footprint_layers_svg(spec),
         f"{base}/review/validation-report.json": json.dumps(report, indent=2, sort_keys=True) + "\n",
+        f"{base}/sources/source-manifest.json": render_source_manifest(spec),
     }
     if spec.model_3d.path:
         files[f"{base}/review/model-3d.svg"] = render_model_3d_svg(spec)

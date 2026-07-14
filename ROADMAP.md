@@ -7,9 +7,9 @@ This roadmap converts the architecture baseline into an implementation sequence.
 - Canonical component specs can be loaded from YAML/JSON-like input and validated by domain rules.
 - The CLI supports `doctor`, `init-library --private`, `schema`, `validate`, `generate`, and `check` commands, with `schema` exporting the committed canonical component JSON Schema.
 - Private component-library repositories can be bootstrapped with safe `.kcf` templates, `.env.example`, default local-secret ignore rules, and doctor checks for obvious committed secret patterns.
-- Deterministic artifact generation covers a first terminal-block example, including KiCad library files, a test project, SVG review artifacts, and a validation report.
+- Deterministic artifact generation covers a first terminal-block example, including KiCad library files, a test project, SVG review artifacts, a source manifest, and a validation report.
 - Review bundles include symbol, footprint, footprint-layer, validation-report, and optional 3D-model association renders.
-- Workflow review commands can answer questions, approve specifications, reject candidates, request changes, and approve releases with hash-bound decisions and dedicated approval records.
+- Workflow review commands can answer questions, approve specifications, reject candidates, request changes, approve releases, and reconcile stale approvals with hash-bound decisions and dedicated approval records.
 - Unit tests cover schema loading, validation failures, artifact generation, and CLI drift checking.
 
 ## Phase 1: Harden the deterministic core
@@ -24,7 +24,7 @@ This roadmap converts the architecture baseline into an implementation sequence.
 
 1. Implement the recommended component-library repository layout, including `.kcf` policy files, `components/`, `libraries/`, `schemas/`, and `test-projects/` directories.
 2. Expand the private-library bootstrap flow with richer policy templates and optional Git initialization.
-3. Add source manifests with SHA-256 hashes, source-retention modes, document revision fields, retrieval dates, and external-reference handling.
+3. Source manifests include SHA-256 hashes, source-retention modes, document revision fields, retrieval dates, and external-reference handling.
 4. Add review-response retention policies for approval summaries, Slack metadata, full embedded thread exports, external references, and restricted local-only responses.
 5. Generate release manifests that record spec hashes, generator versions, KiCad target versions, validation report hashes, known limitations, approver metadata, and review-retention limitations.
 6. Add a Git adapter that creates part branches, stages candidate files, verifies a clean candidate worktree, and commits release candidates without force-pushing.
@@ -80,4 +80,4 @@ This roadmap converts the architecture baseline into an implementation sequence.
 
 ## Near-term recommended next issue
 
-Invalidate downstream workflow states when sources, approved specs, generator versions, or style policies change, using persisted approval records and immutable events as the audit baseline.
+Add review-response retention policies for approval summaries, Slack metadata, full embedded thread exports, external references, and restricted local-only responses.

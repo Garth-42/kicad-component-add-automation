@@ -163,6 +163,13 @@ class WorkflowJob:
     spec_hash: str | None = None
     candidate_hash: str | None = None
     review_bundle_path: str | None = None
+    source_manifest_hash: str | None = None
+    generator_version: str | None = None
+    style_policy_hash: str | None = None
+    approved_source_manifest_hash: str | None = None
+    approved_generator_version: str | None = None
+    approved_style_policy_hash: str | None = None
+    invalidation_reasons: list[str] = field(default_factory=list)
     findings: list[dict[str, Any]] = field(default_factory=list)
     questions: list[ReviewQuestion] = field(default_factory=list)
     events: list[WorkflowEvent] = field(default_factory=list)
@@ -180,6 +187,13 @@ class WorkflowJob:
             spec_hash=data.get("spec_hash"),
             candidate_hash=data.get("candidate_hash"),
             review_bundle_path=data.get("review_bundle_path"),
+            source_manifest_hash=data.get("source_manifest_hash"),
+            generator_version=data.get("generator_version"),
+            style_policy_hash=data.get("style_policy_hash"),
+            approved_source_manifest_hash=data.get("approved_source_manifest_hash"),
+            approved_generator_version=data.get("approved_generator_version"),
+            approved_style_policy_hash=data.get("approved_style_policy_hash"),
+            invalidation_reasons=data.get("invalidation_reasons", []),
             findings=data.get("findings", []),
             questions=[ReviewQuestion.from_dict(item) for item in data.get("questions", [])],
             events=[WorkflowEvent.from_dict(item) for item in data.get("events", [])],
@@ -196,10 +210,25 @@ class WorkflowJob:
             "events": [event.to_dict() for event in self.events],
             "approvals": [approval.to_dict() for approval in self.approvals],
         }
-        for key in ("branch", "created_at", "updated_at", "spec_hash", "candidate_hash", "review_bundle_path"):
+        for key in (
+            "branch",
+            "created_at",
+            "updated_at",
+            "spec_hash",
+            "candidate_hash",
+            "review_bundle_path",
+            "source_manifest_hash",
+            "generator_version",
+            "style_policy_hash",
+            "approved_source_manifest_hash",
+            "approved_generator_version",
+            "approved_style_policy_hash",
+        ):
             value = getattr(self, key)
             if value is not None:
                 result[key] = value
+        if self.invalidation_reasons:
+            result["invalidation_reasons"] = self.invalidation_reasons
         return result
 
     @property
@@ -233,6 +262,13 @@ class WorkflowJob:
         if self.state == WorkflowState.CANDIDATE_GENERATED:
             return [RequiredAction(RequiredActionCode.APPROVE_RELEASE, "Review generated artifacts and approve or reject the release candidate.")]
         if self.state == WorkflowState.CHANGES_REQUESTED:
+            if self.invalidation_reasons:
+                return [
+                    RequiredAction(
+                        RequiredActionCode.APPROVE_SPEC,
+                        "Review and re-approve the canonical specification after upstream metadata changed.",
+                    )
+                ]
             return [RequiredAction(RequiredActionCode.GENERATE_CANDIDATE, "Address requested changes and regenerate deterministic KiCad candidate artifacts.")]
         return [RequiredAction(RequiredActionCode.NONE, "No action required.")]
 
