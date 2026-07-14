@@ -45,8 +45,14 @@ def workflow_statuses(store: WorkflowJobStore, job_id: str | None = None) -> lis
 def format_status_table(statuses: list[WorkflowStatus]) -> str:
     if not statuses:
         return "No workflow jobs found."
-    lines = ["JOB ID  COMPONENT  STATE  NEXT ACTION"]
+
+    lines = ["JOB ID  COMPONENT  STATE  OPEN QUESTIONS  FINDINGS  BRANCH  REVIEW BUNDLE  NEXT ACTION"]
     for status in statuses:
         action = status.required_actions[0].message if status.required_actions else "No action required."
-        lines.append(f"{status.job_id}  {status.component_key}  {status.state.value}  {action}")
+        branch = status.branch or "-"
+        review_bundle = status.review_bundle_path or "-"
+        lines.append(
+            f"{status.job_id}  {status.component_key}  {status.state.value}  "
+            f"{len(status.open_questions)}  {status.finding_count}  {branch}  {review_bundle}  {action}"
+        )
     return "\n".join(lines)
