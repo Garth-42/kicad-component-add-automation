@@ -11,8 +11,14 @@ class WorkflowState(StrEnum):
     SPEC_READY = "SPEC_READY"
     SPEC_APPROVED = "SPEC_APPROVED"
     CANDIDATE_GENERATED = "CANDIDATE_GENERATED"
+    CHANGES_REQUESTED = "CHANGES_REQUESTED"
     BLOCKED = "BLOCKED"
     RELEASED = "RELEASED"
+
+
+class ApprovalScope(StrEnum):
+    SPECIFICATION = "SPECIFICATION"
+    RELEASE_CANDIDATE = "RELEASE_CANDIDATE"
 
 
 class RequiredActionCode(StrEnum):
@@ -59,12 +65,54 @@ class WorkflowEvent:
 
 
 @dataclass(frozen=True)
+class ApprovalRecord:
+    approval_id: str
+    job_id: str
+    scope: ApprovalScope
+    actor: str
+    timestamp: str
+    subject_hash: str
+    subject_hash_type: str
+    event_id: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> ApprovalRecord:
+        return cls(
+            approval_id=data["approval_id"],
+            job_id=data["job_id"],
+            scope=ApprovalScope(data["scope"]),
+            actor=data["actor"],
+            timestamp=data["timestamp"],
+            subject_hash=data["subject_hash"],
+            subject_hash_type=data["subject_hash_type"],
+            event_id=data.get("event_id"),
+        )
+
+    def to_dict(self) -> dict[str, str]:
+        result = {
+            "approval_id": self.approval_id,
+            "job_id": self.job_id,
+            "scope": self.scope.value,
+            "actor": self.actor,
+            "timestamp": self.timestamp,
+            "subject_hash": self.subject_hash,
+            "subject_hash_type": self.subject_hash_type,
+        }
+        if self.event_id is not None:
+            result["event_id"] = self.event_id
+        return result
+
+
+@dataclass(frozen=True)
 class ReviewQuestion:
     question_id: str
     text: str
     blocking: bool = True
     answered: bool = False
     required_role: str | None = None
+    answer: str | None = None
+    answered_by: str | None = None
+    answered_at: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ReviewQuestion:
@@ -74,6 +122,9 @@ class ReviewQuestion:
             blocking=bool(data.get("blocking", True)),
             answered=bool(data.get("answered", False)),
             required_role=data.get("required_role"),
+            answer=data.get("answer"),
+            answered_by=data.get("answered_by"),
+            answered_at=data.get("answered_at"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -85,6 +136,10 @@ class ReviewQuestion:
         }
         if self.required_role is not None:
             result["required_role"] = self.required_role
+        for key in ("answer", "answered_by", "answered_at"):
+            value = getattr(self, key)
+            if value is not None:
+                result[key] = value
         return result
 
 
@@ -111,6 +166,7 @@ class WorkflowJob:
     findings: list[dict[str, Any]] = field(default_factory=list)
     questions: list[ReviewQuestion] = field(default_factory=list)
     events: list[WorkflowEvent] = field(default_factory=list)
+    approvals: list[ApprovalRecord] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> WorkflowJob:
@@ -127,6 +183,7 @@ class WorkflowJob:
             findings=data.get("findings", []),
             questions=[ReviewQuestion.from_dict(item) for item in data.get("questions", [])],
             events=[WorkflowEvent.from_dict(item) for item in data.get("events", [])],
+            approvals=[ApprovalRecord.from_dict(item) for item in data.get("approvals", [])],
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -137,6 +194,7 @@ class WorkflowJob:
             "findings": self.findings,
             "questions": [question.to_dict() for question in self.questions],
             "events": [event.to_dict() for event in self.events],
+            "approvals": [approval.to_dict() for approval in self.approvals],
         }
         for key in ("branch", "created_at", "updated_at", "spec_hash", "candidate_hash", "review_bundle_path"):
             value = getattr(self, key)
@@ -174,6 +232,8 @@ class WorkflowJob:
             return [RequiredAction(RequiredActionCode.GENERATE_CANDIDATE, "Generate deterministic KiCad candidate artifacts.")]
         if self.state == WorkflowState.CANDIDATE_GENERATED:
             return [RequiredAction(RequiredActionCode.APPROVE_RELEASE, "Review generated artifacts and approve or reject the release candidate.")]
+        if self.state == WorkflowState.CHANGES_REQUESTED:
+            return [RequiredAction(RequiredActionCode.GENERATE_CANDIDATE, "Address requested changes and regenerate deterministic KiCad candidate artifacts.")]
         return [RequiredAction(RequiredActionCode.NONE, "No action required.")]
 
 

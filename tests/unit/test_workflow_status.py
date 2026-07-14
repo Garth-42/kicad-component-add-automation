@@ -94,3 +94,107 @@ def test_cli_jobs_status_json_for_specific_job(tmp_path: Path, capsys) -> None:
     assert payload[0]["job_id"] == "job-4"
     assert payload[0]["state"] == "CANDIDATE_GENERATED"
     assert payload[0]["required_actions"][0]["code"] == "APPROVE_RELEASE"
+
+
+def test_cli_answer_question_persists_answer_and_event(tmp_path: Path, capsys) -> None:
+    _write_job(
+        tmp_path,
+        {
+            "job_id": "job-5",
+            "component_key": "example-part",
+            "state": "SPEC_READY",
+            "questions": [{"question_id": "q-1", "text": "Confirm pin 1.", "blocking": True, "answered": False}],
+        },
+    )
+
+    assert run(["jobs", "answer-question", "job-5", "q-1", "--answer", "Pin 1 is square.", "--actor", "reviewer", "--repo-root", str(tmp_path)]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["questions"][0]["answered"] is True
+    assert payload["questions"][0]["answer"] == "Pin 1 is square."
+    assert payload["questions"][0]["answered_by"] == "reviewer"
+    assert payload["events"][0]["event_type"] == "QUESTION_ANSWERED"
+
+
+def test_cli_approve_spec_is_hash_bound(tmp_path: Path, capsys) -> None:
+    _write_job(
+        tmp_path,
+        {
+            "job_id": "job-6",
+            "component_key": "example-part",
+            "state": "SPEC_READY",
+            "spec_hash": "sha256:abc",
+        },
+    )
+
+    assert run(["jobs", "approve-spec", "job-6", "--spec-hash", "sha256:wrong", "--repo-root", str(tmp_path)]) == 1
+    assert "spec hash mismatch" in capsys.readouterr().out
+
+    assert run(["jobs", "approve-spec", "job-6", "--spec-hash", "sha256:abc", "--actor", "reviewer", "--repo-root", str(tmp_path)]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["state"] == "SPEC_APPROVED"
+    assert payload["events"][0]["event_type"] == "SPEC_APPROVED"
+    assert payload["events"][0]["data"]["spec_hash"] == "sha256:abc"
+    assert payload["events"][0]["data"]["approval_id"] == payload["approvals"][0]["approval_id"]
+    assert payload["approvals"][0]["scope"] == "SPECIFICATION"
+    assert payload["approvals"][0]["subject_hash"] == "sha256:abc"
+    assert payload["approvals"][0]["subject_hash_type"] == "spec_hash"
+    assert payload["approvals"][0]["actor"] == "reviewer"
+
+
+def test_cli_release_decisions_are_hash_bound(tmp_path: Path, capsys) -> None:
+    _write_job(
+        tmp_path,
+        {
+            "job_id": "job-7",
+            "component_key": "example-part",
+            "state": "CANDIDATE_GENERATED",
+            "candidate_hash": "sha256:def",
+        },
+    )
+
+    assert run(["jobs", "reject-candidate", "job-7", "--candidate-hash", "sha256:def", "--reason", "Courtyard too tight.", "--repo-root", str(tmp_path)]) == 0
+    rejected = json.loads(capsys.readouterr().out)
+    assert rejected["state"] == "CHANGES_REQUESTED"
+    assert rejected["events"][0]["event_type"] == "RELEASE_REJECTED"
+    assert rejected["events"][0]["data"]["reason"] == "Courtyard too tight."
+
+    assert run(["jobs", "approve-release", "job-7", "--candidate-hash", "sha256:wrong", "--repo-root", str(tmp_path)]) == 1
+    assert "candidate hash mismatch" in capsys.readouterr().out
+
+    assert run(["jobs", "approve-release", "job-7", "--candidate-hash", "sha256:def", "--actor", "reviewer", "--repo-root", str(tmp_path)]) == 0
+    approved = json.loads(capsys.readouterr().out)
+    assert approved["state"] == "RELEASED"
+    assert approved["events"][-1]["event_type"] == "RELEASE_APPROVED"
+    assert approved["events"][-1]["data"]["approval_id"] == approved["approvals"][0]["approval_id"]
+    assert approved["approvals"][0]["scope"] == "RELEASE_CANDIDATE"
+    assert approved["approvals"][0]["subject_hash"] == "sha256:def"
+    assert approved["approvals"][0]["subject_hash_type"] == "candidate_hash"
+
+
+def test_workflow_job_round_trips_dedicated_approval_records() -> None:
+    job = WorkflowJob.from_dict(
+        {
+            "job_id": "job-8",
+            "component_key": "example-part",
+            "approvals": [
+                {
+                    "approval_id": "approval-1",
+                    "job_id": "job-8",
+                    "scope": "SPECIFICATION",
+                    "actor": "reviewer",
+                    "timestamp": "2026-07-14T00:00:00Z",
+                    "subject_hash": "sha256:abc",
+                    "subject_hash_type": "spec_hash",
+                    "event_id": "event-1",
+                }
+            ],
+        }
+    )
+
+    payload = job.to_dict()
+
+    assert payload["approvals"][0]["approval_id"] == "approval-1"
+    assert payload["approvals"][0]["scope"] == "SPECIFICATION"
+    assert payload["approvals"][0]["event_id"] == "event-1"

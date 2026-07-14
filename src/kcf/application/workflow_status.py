@@ -13,6 +13,9 @@ class WorkflowJobStore:
     def get_job(self, job_id: str) -> WorkflowJob | None:
         raise NotImplementedError
 
+    def save_job(self, job: WorkflowJob) -> None:
+        raise NotImplementedError
+
 
 class JsonWorkflowJobStore(WorkflowJobStore):
     def __init__(self, repo_root: Path) -> None:
@@ -30,6 +33,11 @@ class JsonWorkflowJobStore(WorkflowJobStore):
         if not path.exists():
             return None
         return self._load(path)
+
+    def save_job(self, job: WorkflowJob) -> None:
+        self.jobs_dir.mkdir(parents=True, exist_ok=True)
+        path = self.jobs_dir / f"{job.job_id}.json"
+        path.write_text(json.dumps(job.to_dict(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
     def _load(self, path: Path) -> WorkflowJob:
         return WorkflowJob.from_dict(json.loads(path.read_text(encoding="utf-8")))

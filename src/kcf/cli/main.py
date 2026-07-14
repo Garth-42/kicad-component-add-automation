@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 from kcf.application.bootstrap import doctor_findings, init_private_library
+from kcf.application.workflow_actions import WorkflowActionError, answer_question, approve_release, approve_spec, reject_candidate, request_changes
 from kcf.application.workflow_status import JsonWorkflowJobStore, format_status_table, workflow_statuses
 from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
@@ -37,6 +38,33 @@ def run(argv: list[str] | None = None) -> int:
     status_p.add_argument("job_id", nargs="?")
     status_p.add_argument("--repo-root", type=Path, default=Path("."))
     status_p.add_argument("--json", action="store_true", dest="json_output")
+    answer_p = jobs_sub.add_parser("answer-question")
+    answer_p.add_argument("job_id")
+    answer_p.add_argument("question_id")
+    answer_p.add_argument("--answer", required=True)
+    answer_p.add_argument("--actor", default="local-user")
+    answer_p.add_argument("--repo-root", type=Path, default=Path("."))
+    approve_spec_p = jobs_sub.add_parser("approve-spec")
+    approve_spec_p.add_argument("job_id")
+    approve_spec_p.add_argument("--spec-hash", required=True)
+    approve_spec_p.add_argument("--actor", default="local-user")
+    approve_spec_p.add_argument("--repo-root", type=Path, default=Path("."))
+    approve_release_p = jobs_sub.add_parser("approve-release")
+    approve_release_p.add_argument("job_id")
+    approve_release_p.add_argument("--candidate-hash", required=True)
+    approve_release_p.add_argument("--actor", default="local-user")
+    approve_release_p.add_argument("--repo-root", type=Path, default=Path("."))
+    reject_p = jobs_sub.add_parser("reject-candidate")
+    reject_p.add_argument("job_id")
+    reject_p.add_argument("--candidate-hash", required=True)
+    reject_p.add_argument("--reason", required=True)
+    reject_p.add_argument("--actor", default="local-user")
+    reject_p.add_argument("--repo-root", type=Path, default=Path("."))
+    changes_p = jobs_sub.add_parser("request-changes")
+    changes_p.add_argument("job_id")
+    changes_p.add_argument("--reason", required=True)
+    changes_p.add_argument("--actor", default="local-user")
+    changes_p.add_argument("--repo-root", type=Path, default=Path("."))
     args = parser.parse_args(argv)
 
     if args.command == "doctor":
@@ -98,6 +126,26 @@ def run(argv: list[str] | None = None) -> int:
         else:
             print(format_status_table(statuses))
         return 1 if args.job_id and not statuses else 0
+    if args.command == "jobs":
+        store = JsonWorkflowJobStore(args.repo_root)
+        try:
+            if args.jobs_command == "answer-question":
+                job = answer_question(store, args.job_id, args.question_id, args.answer, args.actor)
+            elif args.jobs_command == "approve-spec":
+                job = approve_spec(store, args.job_id, args.spec_hash, args.actor)
+            elif args.jobs_command == "approve-release":
+                job = approve_release(store, args.job_id, args.candidate_hash, args.actor)
+            elif args.jobs_command == "reject-candidate":
+                job = reject_candidate(store, args.job_id, args.candidate_hash, args.actor, args.reason)
+            elif args.jobs_command == "request-changes":
+                job = request_changes(store, args.job_id, args.actor, args.reason)
+            else:
+                return 2
+        except WorkflowActionError as exc:
+            print(f"error: {exc}")
+            return 1
+        print(json.dumps(job.to_dict(), indent=2))
+        return 0
     return 2
 
 
