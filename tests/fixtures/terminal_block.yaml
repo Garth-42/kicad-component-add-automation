@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0",
+  "component_key": "example-manufacturer-abc123-03",
+  "identity": {
+    "manufacturer": "Example Manufacturer",
+    "manufacturer_part_number": "ABC123-03",
+    "library_name": "Company_Electrical",
+    "symbol_name": "ABC123-03",
+    "footprint_name": "TerminalBlock_ABC123-03_1x03_P5.08mm",
+    "description": "Three-position through-hole terminal block",
+    "datasheet_description": "PCB terminal block, 3 positions, horizontal wire entry, through-hole",
+    "keywords": ["terminal block", "5.08 mm", "through hole"]
+  },
+  "classification": {"family": "terminal_block", "risk_level": "medium", "safety_related": false, "mains_rated": false},
+  "symbol": {
+    "reference_prefix": "J",
+    "representation": "single_unit",
+    "body": {"width_grid_units": 6, "height_grid_units": 6},
+    "pins": [
+      {"number": "1", "name": "1", "electrical_type": "passive", "orientation": "right", "group": "terminals"},
+      {"number": "2", "name": "2", "electrical_type": "passive", "orientation": "right", "group": "terminals"},
+      {"number": "3", "name": "3", "electrical_type": "passive", "orientation": "right", "group": "terminals"}
+    ]
+  },
+  "footprint": {
+    "technology": "through_hole",
+    "origin_strategy": "pad_1",
+    "pitch_mm": "5.08",
+    "body": {"width_mm": "15.24", "depth_mm": "10.20", "height_mm": "12.00"},
+    "pads": [
+      {"number": "1", "x_mm": "0.00", "y_mm": "0.00", "shape": "rect", "size_x_mm": "2.40", "size_y_mm": "2.40", "drill_mm": "1.30"},
+      {"number": "2", "x_mm": "5.08", "y_mm": "0.00", "shape": "circle", "size_x_mm": "2.40", "size_y_mm": "2.40", "drill_mm": "1.30"},
+      {"number": "3", "x_mm": "10.16", "y_mm": "0.00", "shape": "circle", "size_x_mm": "2.40", "size_y_mm": "2.40", "drill_mm": "1.30"}
+    ],
+    "courtyard": {"method": "body_plus_clearance", "clearance_mm": "0.50"}
+  },
+  "model_3d": {"status": "not_provided"},
+  "sources": [],
+  "evidence": {"facts": []},
+  "assumptions": [],
+  "policies": {},
+  "release_constraints": {"required_human_roles": ["electrical_reviewer"], "block_on_warning_codes": ["PIN_PAD_MISMATCH"]}
+}
