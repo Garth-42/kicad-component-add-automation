@@ -88,7 +88,6 @@ def approve_release(store: WorkflowJobStore, job_id: str, candidate_hash: str, a
     return updated
 
 
-
 def reconcile_stale_approvals(store: WorkflowJobStore, job_id: str, actor: str = "kcf") -> WorkflowJob:
     job = _require_job(store, job_id)
     reasons = stale_approval_reasons(job)
@@ -128,6 +127,7 @@ def stale_approval_reasons(job: WorkflowJob) -> list[str]:
         if approved is not None and current != approved:
             reasons.append(f"{name} changed from {approved} to {current or 'unset'}")
     return reasons
+
 
 def reject_candidate(store: WorkflowJobStore, job_id: str, candidate_hash: str, actor: str, reason: str) -> WorkflowJob:
     job = _require_job(store, job_id)

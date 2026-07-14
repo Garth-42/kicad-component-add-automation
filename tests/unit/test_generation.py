@@ -39,3 +39,15 @@ def test_write_artifacts_and_cli_check(tmp_path: Path) -> None:
 
 def test_cli_validate_passes() -> None:
     assert run(["validate", str(FIXTURE)]) == 0
+
+
+def test_artifact_map_includes_source_manifest() -> None:
+    spec = load_component(FIXTURE)
+    artifacts = artifact_map(spec)
+    manifest_path = f"components/example-manufacturer-abc123/{spec.component_key}/sources/source-manifest.json"
+    manifest = artifacts[manifest_path]
+
+    assert '"manifest_hash": "sha256:' in manifest
+    assert '"source_count": 1' in manifest
+    assert '"source_id": "datasheet"' in manifest
+    assert '"retention_mode": "external_reference"' in manifest

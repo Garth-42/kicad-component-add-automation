@@ -19,7 +19,9 @@ kcf check tests/fixtures/terminal_block.yaml --output-root build/example
 
 Generated candidates include a review bundle under `components/<manufacturer>/<component>/review/`
 with `symbol.svg`, `footprint.svg`, `footprint-layers.svg`, `validation-report.json`, and
-`model-3d.svg` when the canonical specification references a 3D model path.
+`model-3d.svg` when the canonical specification references a 3D model path. Generation also writes
+`components/<manufacturer>/<component>/sources/source-manifest.json`, a deterministic manifest of retained
+source-document metadata and SHA-256 hashes.
 
 ## Private library bootstrap
 

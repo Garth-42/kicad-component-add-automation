@@ -39,10 +39,7 @@
     "sources": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": {
-          "type": "string"
-        }
+        "$ref": "#/$defs/source_document"
       }
     },
     "evidence": {
@@ -349,6 +346,63 @@
           "default": "unknown"
         },
         "path": {
+          "type": "string"
+        }
+      }
+    },
+    "source_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "title",
+        "kind",
+        "sha256",
+        "retention_mode"
+      ],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "retention_mode": {
+          "type": "string",
+          "enum": [
+            "embedded",
+            "external_reference",
+            "restricted",
+            "local_only"
+          ]
+        },
+        "document_revision": {
+          "type": "string"
+        },
+        "retrieval_date": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "uri": {
+          "type": "string"
+        },
+        "external_reference": {
+          "type": "string"
+        },
+        "local_path": {
+          "type": "string"
+        },
+        "notes": {
           "type": "string"
         }
       }
