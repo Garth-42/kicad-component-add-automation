@@ -32,3 +32,15 @@ To make a YAML upload run on GitHub runners:
 4. GitHub Actions will run **Component Check**, which validates the YAML, generates artifacts into `.kcf-ci/generated`, checks deterministic regeneration, and uploads review artifacts.
 
 The workflow also watches `tests/fixtures/*.yaml` so the included fixture can exercise CI before real component files exist. It can also be run manually from the GitHub Actions tab because `workflow_dispatch` is enabled.
+
+## Avoiding pull-request merge conflicts
+
+Before pushing a component branch, update it from the default branch and run the local checks:
+
+```bash
+git fetch origin main
+git rebase origin/main
+pytest -q
+```
+
+The **Mergeability Check** workflow (`.github/workflows/mergeability.yml`) also runs on pull requests and attempts a no-commit merge against the PR base branch. If it fails, rebase the branch on the latest `main`, resolve conflicts locally, rerun tests, and push the resolved branch.
