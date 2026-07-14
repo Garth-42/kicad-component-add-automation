@@ -1,7 +1,9 @@
+import json
 from pathlib import Path
 
 import pytest
 
+from kcf.cli.main import run
 from kcf.domain.component import ComponentSpec, ComponentValidationError
 from kcf.domain.serialization import dump_component_yaml, load_component, component_to_dict
 from kcf.validation.core import validate_component
@@ -35,3 +37,18 @@ def test_invalid_component_key_rejected() -> None:
     data["component_key"] = "Bad Key"
     with pytest.raises(ComponentValidationError):
         ComponentSpec.from_dict(data)
+
+
+def test_component_schema_file_matches_cli_output(tmp_path: Path) -> None:
+    schema_path = tmp_path / "component.schema.json"
+    assert run(["schema", "--output", str(schema_path)]) == 0
+    assert schema_path.read_text(encoding="utf-8") == Path("schemas/component.schema.json").read_text(encoding="utf-8")
+
+
+def test_component_schema_documents_core_constraints() -> None:
+    schema = json.loads(Path("schemas/component.schema.json").read_text(encoding="utf-8"))
+    assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
+    assert schema["properties"]["schema_version"]["const"] == "1.0"
+    assert schema["properties"]["component_key"]["pattern"] == "^[a-z0-9-]+$"
+    assert schema["$defs"]["classification"]["properties"]["risk_level"]["enum"] == ["low", "medium", "high"]
+    assert schema["$defs"]["footprint_pad"]["properties"]["shape"]["enum"] == ["rect", "circle", "oval"]
