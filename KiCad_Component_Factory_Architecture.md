@@ -63,6 +63,8 @@ The architecture should leave room for future generation of complete reference s
 | Agent | A constrained AI-backed operation that accepts and returns typed structured data. |
 | Generator | Deterministic code that converts approved structured data into files. |
 | Validator | Deterministic or AI-assisted check that reports findings without silently changing released data. |
+| Collaboration adapter | Optional integration, such as Slack, that projects workflow events into a team communication tool and submits authenticated commands back to application services. |
+| Review question | A persisted request for human input raised by an agent, validator, or reviewer. Questions may be blocking or non-blocking depending on the transition being attempted. |
 
 ## 5. Architectural principles
 
@@ -118,6 +120,7 @@ These defaults should be implemented but remain configurable:
 | Canonical format | YAML for human review, validated through Pydantic models and exported JSON Schema. |
 | AI | Provider-neutral interface; one hosted provider adapter first, local inference later. |
 | Job execution | In-process asynchronous worker for MVP; queue interface allows later replacement. |
+| Collaboration | Optional Slack adapter for review notifications, hash-bound approve/deny actions, agent questions, and workflow status; CLI and web workflows remain fully usable without Slack. |
 | Authentication | Loopback-only local service by default; no login in MVP. |
 | 3D models | Referenced or copied according to repository policy; never fabricated by the model. |
 
@@ -128,6 +131,8 @@ These defaults should be implemented but remain configurable:
 The engineer interacts through a browser or CLI. The local application owns workflow state and file generation. It may call a hosted or local model provider, invokes the local KiCad toolchain for validation and rendering, and writes changes only to a job-specific Git branch.
 
 External dependencies are not permitted to bypass the application-service layer.
+
+When configured, collaboration tools such as Slack receive notifications derived from persisted workflow events and may submit authenticated commands to the application. They are not systems of record for approvals, questions, release state, or generated artifacts.
 
 ## 8. High-level architecture
 
@@ -157,11 +162,14 @@ Application services implement use cases:
 - Attach and hash source documents.
 - Extract facts from source documents.
 - Resolve ambiguities and edit the canonical specification.
+- Create, route, answer, and resolve review questions.
 - Approve a specification.
 - Generate KiCad artifacts.
 - Validate artifacts.
 - Render review images.
 - Approve or reject a release candidate.
+- Notify reviewers of required actions through optional collaboration channels.
+- Query workflow status for in-progress jobs and parts.
 - Commit, tag, and optionally open a pull request.
 - Regenerate and validate the entire repository.
 
@@ -177,6 +185,8 @@ Infrastructure adapters include:
 - Model provider adapter.
 - KiCad CLI adapter.
 - SVG/PNG rendering adapter.
+- Collaboration notification adapter.
+- Slack adapter for interactive review commands and status queries.
 - Clock and identity providers.
 
 ### 8.4 Interface layer
@@ -197,7 +207,10 @@ The interface layer includes:
 kicad-component-library/
 ├── .kcf/
 │   ├── config.yaml
+│   ├── config.example.yaml
+│   ├── config.local.yaml          # local, gitignored
 │   ├── schema-version
+│   ├── slack.example.yaml
 │   └── policies/
 │       ├── library-style.yaml
 │       ├── risk-rules.yaml
@@ -240,9 +253,31 @@ kicad-component-library/
 ├── .github/workflows/
 │   ├── component-check.yml
 │   └── library-regression.yml
+├── .env.example
+├── .gitignore
 ├── pyproject.toml
 └── README.md
 ```
+
+### 9.1.1 Public application repository and private library repositories
+
+KCF should support a public or broadly shared application repository while making it easy to initialize a private component-library repository or private fork for real engineering work.
+
+The application repository may contain source code, schemas, tests, documentation, example fixtures, and redacted example configuration. The private library repository contains company component specifications, review evidence, generated KiCad libraries, source manifests, release manifests, and any permitted source documents.
+
+Secrets are never committed. Slack bot tokens, Slack signing secrets, hosted model credentials, webhook URLs, and internal API keys must come from environment variables, a local gitignored configuration file, an operating-system secret store, or a CI secret manager.
+
+Recommended gitignored local files include:
+
+- `.kcf/config.local.yaml`
+- `.kcf/secrets/`
+- `.kcf/runtime/`
+- `.env`
+- `.env.*`
+- `*.sqlite`
+- `*.sqlite3`
+
+Committed setup files should use safe templates such as `.env.example`, `.kcf/config.example.yaml`, and `.kcf/slack.example.yaml`. A bootstrap command such as `kcf init-library --private` should create the private repository layout, copy safe templates, install a conservative `.gitignore`, and leave credentials unset.
 
 ### 9.2 Source retention policy
 
@@ -260,6 +295,19 @@ The source manifest is always committed. Source files are committed only when co
 - Page count and extracted page-image hashes for PDFs.
 
 The system must continue to validate evidence references even when a source is external. A release cannot claim reproducibility if the source is unavailable; such releases must explicitly record the limitation.
+
+### 9.2.1 Review-response retention policy
+
+Human review responses, Slack message metadata, agent questions, and reviewer comments are workflow evidence and can contain sensitive engineering context. Retention must be policy-driven.
+
+Supported review-response storage modes should include:
+
+- `summary_only`: commit the decision, actor, timestamp, approved hash, and concise reason; this is the default.
+- `external`: commit a reference such as a Slack workspace/channel/message timestamp or permalink without full message text.
+- `embedded`: commit the full review text or thread export when company policy permits.
+- `restricted`: keep the response in the local operational database or another private store and commit only a limitation or external reference.
+
+Release manifests must not claim that restricted review content is reproducible from Git alone.
 
 ### 9.3 Branching strategy
 
@@ -348,7 +396,74 @@ No model API is required during repository-wide CI. CI validates committed struc
 - Changing a source invalidates extraction and every downstream state.
 - Changing a generator version invalidates generated artifacts and validation, but not approved source facts.
 - Changing a style policy invalidates generation and validation for affected components.
+- Unresolved blocking questions prevent transitions whose guards depend on the missing answer.
+- Non-blocking questions may remain open while unrelated extraction, generation, rendering, or validation work continues.
 - Release requires a clean Git worktree except for files explicitly included in the candidate commit.
+
+### 11.3 Questions and required actions
+
+Questions are first-class workflow records, not prompt comments or transient chat messages. Agents, deterministic validators, reviewers, and application services may create questions when additional human input would improve or unblock a job.
+
+Each question must contain:
+
+- Question identifier.
+- Job identifier and component key.
+- Originator type: agent, validator, reviewer, or system.
+- Blocking flag and the transition or guard it blocks, if any.
+- Prompt text and structured answer schema when applicable.
+- Related finding, evidence reference, source hash, specification hash, or candidate hash.
+- Assignee role or reviewer identity when known.
+- Creation time, due time when applicable, and current status.
+
+Question statuses are:
+
+| Status | Meaning |
+|---|---|
+| `OPEN` | The question is waiting for an answer. |
+| `ANSWERED` | A human has provided a response. |
+| `RESOLVED` | The answer was applied, rejected, or converted into a finding or assumption. |
+| `EXPIRED` | The question exceeded its configured response window. |
+| `CANCELLED` | The question no longer applies because the job changed. |
+
+Answers submitted through Slack, CLI, or the web UI execute the same application command and append immutable events. A Slack answer may include message metadata, but the persisted workflow record remains authoritative.
+
+### 11.4 Workflow status summaries
+
+The application shall expose a status summary for in-progress parts through CLI, REST API, web UI, and optional collaboration adapters. The same application query should power all interfaces.
+
+A status summary includes:
+
+- Component key and manufacturer part number.
+- Current workflow state.
+- Active Git branch.
+- Latest persisted event and timestamp.
+- Open blocking findings.
+- Open blocking and non-blocking questions.
+- Current required human actions.
+- Validation status.
+- Review bundle paths or links.
+- Current specification hash and candidate hash when available.
+- Next recommended command or action.
+
+Slack commands such as `/kcf status` may display this summary, but Slack is only a projection of application state.
+
+### 11.5 Collaboration and Slack review operations
+
+Collaboration integrations are optional adapters over workflow events and application commands. Slack is the first recommended collaboration adapter because it can deliver review notifications, collect hash-bound approvals or denials, ask and answer questions, and show status for in-progress parts.
+
+Slack interactions must obey these rules:
+
+- Slack is not the system of record for approvals, release state, or questions.
+- Inbound Slack requests must verify the signing secret, timestamp, and replay window.
+- Bot tokens and signing secrets must come from environment variables, local gitignored config, or a secret manager.
+- Slack user IDs must be mapped to application actors and roles before they can approve or deny.
+- Approval and denial actions must include the exact specification hash or candidate hash being acted on.
+- If the referenced hash no longer matches current job state, the command fails closed and asks the reviewer to refresh.
+- Slack approval, denial, and answer actions call the same application services used by CLI and web interfaces.
+- Slack raw payloads and full message text are not committed unless review-response retention policy explicitly permits it.
+- Notification delivery failure does not change workflow state; it creates a warning or delivery event.
+
+A standard Slack review thread may receive messages for job creation, sources ready, extraction completed, questions opened, specification ready for approval, artifacts generated, validation completed, release candidate ready, approval or denial recorded, and pull request opened.
 
 ## 12. Canonical component specification
 
