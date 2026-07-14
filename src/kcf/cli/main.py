@@ -5,7 +5,7 @@ import json
 import shutil
 from pathlib import Path
 
-from kcf.domain.component import ComponentSpec
+from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
 from kcf.generation.artifacts import artifact_map, write_artifacts
 from kcf.validation.core import validate_component
@@ -32,7 +32,7 @@ def run(argv: list[str] | None = None) -> int:
         print(f"KiCad CLI: {shutil.which('kicad-cli') or 'not found'}")
         return 0
     if args.command == "schema":
-        text = json.dumps({"title": "ComponentSpec", "schema_version": "1.0"}, indent=2) + "\n"
+        text = dump_component_schema()
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(text, encoding="utf-8")
