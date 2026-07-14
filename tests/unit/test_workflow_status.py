@@ -64,6 +64,9 @@ def test_json_store_reads_jobs_and_formats_table(tmp_path: Path) -> None:
     assert len(statuses) == 1
     assert statuses[0].required_actions[0].code == RequiredActionCode.GENERATE_CANDIDATE
     assert "job-3" in table
+    assert "OPEN QUESTIONS" in table
+    assert "FINDINGS" in table
+    assert "parts/example-part" in table
     assert "GENERATE" in table or "Generate" in table
 
 
