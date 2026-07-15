@@ -1,0 +1,32 @@
+{
+  "Product": {
+    "ProductNumber": "277-1751248-ND",
+    "ManufacturerProductNumber": "1751248",
+    "Manufacturer": {"Name": "Phoenix Contact"},
+    "Description": {
+      "ProductDescription": "TERM BLOCK 3POS 5.08MM PCB",
+      "DetailedDescription": "3 Position Wire to Board Terminal Block Horizontal with Board Through Hole"
+    },
+    "DatasheetUrl": "https://example.test/1751248.pdf",
+    "ProductUrl": "https://www.digikey.com/en/products/detail/phoenix-contact/1751248/",
+    "PhotoUrl": "https://example.test/1751248.jpg",
+    "ProductStatus": {"Status": "Active"},
+    "QuantityAvailable": 1234,
+    "MinimumOrderQuantity": 1,
+    "Packaging": {"Value": "Bulk"},
+    "Category": {"Name": "Terminal Blocks", "Parent": {"Name": "Connectors, Interconnects"}},
+    "Parameters": [
+      {"ParameterText": "Pitch", "ValueText": "5.08mm", "Unit": "mm"},
+      {"ParameterText": "Number of Positions", "ValueText": "3"},
+      {"ParameterText": "Series", "ValueText": "COMBICON MKDS"},
+      {"ParameterText": "RoHS Status", "ValueText": "RoHS Compliant"}
+    ],
+    "StandardPricing": [
+      {"BreakQuantity": 1, "UnitPrice": "1.23000", "Currency": "USD"},
+      {"BreakQuantity": 10, "UnitPrice": "1.10000", "Currency": "USD"}
+    ],
+    "MediaLinks": [
+      {"Title": "3D Model", "Url": "https://example.test/1751248.step"}
+    ]
+  }
+}

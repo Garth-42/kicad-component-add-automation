@@ -10,6 +10,8 @@ from kcf.application.workflow_actions import WorkflowActionError, answer_questio
 from kcf.application.workflow_status import JsonWorkflowJobStore, format_status_table, workflow_statuses
 from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
+from kcf.ingestion.normalized import PartLookupQuery
+from kcf.ingestion.sources.digikey import DigiKeyAdapter, result_from_product_details
 from kcf.generation.artifacts import artifact_map, write_artifacts
 from kcf.validation.core import validate_component
 
@@ -32,6 +34,15 @@ def run(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser("check")
     check_p.add_argument("spec_path", type=Path)
     check_p.add_argument("--output-root", type=Path, default=Path("."))
+    ingest_p = sub.add_parser("ingest")
+    ingest_sub = ingest_p.add_subparsers(dest="ingest_command", required=True)
+    lookup_p = ingest_sub.add_parser("lookup")
+    lookup_p.add_argument("--source", choices=["digikey"], required=True)
+    lookup_p.add_argument("--mpn", required=True, help="Manufacturer or DigiKey part number to look up")
+    lookup_p.add_argument("--manufacturer")
+    lookup_p.add_argument("--output", "-o", type=Path, help="Write SourceFetchResult JSON to this path instead of stdout")
+    lookup_p.add_argument("--sandbox", action="store_true", help="Use DigiKey sandbox host for live lookups")
+    lookup_p.add_argument("--raw-json", type=Path, help="Normalize a saved DigiKey ProductDetails JSON response instead of calling the API")
     jobs_p = sub.add_parser("jobs")
     jobs_sub = jobs_p.add_subparsers(dest="jobs_command", required=True)
     status_p = jobs_sub.add_parser("status")
@@ -89,6 +100,23 @@ def run(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "schema":
         text = dump_component_schema()
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(text, encoding="utf-8")
+        else:
+            print(text, end="")
+        return 0
+    if args.command == "ingest" and args.ingest_command == "lookup":
+        query = PartLookupQuery(manufacturer_part_number=args.mpn, manufacturer=args.manufacturer)
+        if args.source == "digikey":
+            if args.raw_json:
+                payload = json.loads(args.raw_json.read_text(encoding="utf-8"))
+                result = result_from_product_details(payload, query=query)
+            else:
+                result = DigiKeyAdapter.from_env(sandbox=args.sandbox).lookup_part(query)
+        else:
+            return 2
+        text = result.to_json()
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(text, encoding="utf-8")

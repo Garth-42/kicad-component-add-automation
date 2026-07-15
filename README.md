@@ -15,6 +15,18 @@ pytest
 kcf validate tests/fixtures/terminal_block.yaml
 kcf generate tests/fixtures/terminal_block.yaml --output-root build/example
 kcf check tests/fixtures/terminal_block.yaml --output-root build/example
+kcf ingest lookup --source digikey --mpn 1751248 --raw-json tests/fixtures/ingestion/digikey_productdetails.json --output build/digikey-result.json
+```
+
+
+## DigiKey ingestion
+
+The first source-adapter workflow supports DigiKey Product Information V4 lookups. For live requests, set `DIGIKEY_CLIENT_ID` and `DIGIKEY_CLIENT_SECRET`; add `--sandbox` to use DigiKey's sandbox host. For repeatable local development and tests, `--raw-json` normalizes a saved ProductDetails response without network access. The command writes a `SourceFetchResult` JSON payload containing request fingerprints, raw payload hashes, normalized identity/commercial/document/CAD fields, license notes, and warnings.
+
+```bash
+kcf ingest lookup --source digikey --mpn 1751248 --output build/digikey-result.json
+kcf ingest lookup --source digikey --mpn 1751248 --sandbox --output build/digikey-result.json
+kcf ingest lookup --source digikey --mpn 1751248 --raw-json tests/fixtures/ingestion/digikey_productdetails.json
 ```
 
 Generated candidates include a review bundle under `components/<manufacturer>/<component>/review/`
