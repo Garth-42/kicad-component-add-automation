@@ -21,7 +21,9 @@ Generated candidates include a review bundle under `components/<manufacturer>/<c
 with `symbol.svg`, `footprint.svg`, `footprint-layers.svg`, `validation-report.json`, and
 `model-3d.svg` when the canonical specification references a 3D model path. Generation also writes
 `components/<manufacturer>/<component>/sources/source-manifest.json`, a deterministic manifest of retained
-source-document metadata and SHA-256 hashes.
+source-document metadata and SHA-256 hashes, plus `components/<manufacturer>/<component>/release.json`
+with the spec hash, candidate bundle hash, generator version, KiCad target version, validation-report hash,
+source-manifest hash, approver metadata, and review-retention limitations.
 
 ## Private library bootstrap
 
@@ -34,13 +36,15 @@ kcf doctor --repo-root ../my-private-kicad-library
 
 The bootstrap command writes `.kcf/config.example.yaml`, `.kcf/slack.example.yaml`, `.env.example`, and a conservative `.gitignore`. Real Slack/model-provider credentials should be supplied through environment variables, local gitignored config, or a secret manager rather than committed files.
 
-## Workflow status
+## Workflow status and release candidates
 
 Inspect persisted workflow jobs from a private library repository:
 
 ```bash
 kcf jobs status --repo-root ../my-private-kicad-library
 kcf jobs status job-123 --repo-root ../my-private-kicad-library --json
+kcf jobs create tests/fixtures/terminal_block.yaml --job-id job-123 --repo-root ../my-private-kicad-library
+kcf jobs generate-candidate job-123 tests/fixtures/terminal_block.yaml --repo-root ../my-private-kicad-library --commit
 kcf jobs answer-question job-123 q-1 --answer "Pin 1 is square." --actor reviewer --repo-root ../my-private-kicad-library
 kcf jobs approve-spec job-123 --spec-hash sha256:... --actor reviewer --repo-root ../my-private-kicad-library
 kcf jobs reject-candidate job-123 --candidate-hash sha256:... --reason "Courtyard too tight." --actor reviewer --repo-root ../my-private-kicad-library
@@ -50,3 +54,13 @@ kcf jobs reconcile job-123 --actor automation --repo-root ../my-private-kicad-li
 
 Jobs are read from `.kcf/runtime/jobs/*.json` and status output summarizes state, open questions, finding counts, branch, review bundle path, and the next required action.
 Review commands update the same job files with immutable workflow events and require exact specification or candidate hashes for approvals and release decisions. Successful spec and release approvals also persist dedicated approval records with actor, timestamp, approval scope, approved hash, and the event that recorded the decision. Specification approvals capture source-manifest, generator-version, and style-policy baselines; `jobs reconcile` invalidates downstream candidate/release state when any approved baseline changes so the part must be re-reviewed before release.
+
+## CI entry points
+
+```bash
+kcf ci component-check tests/fixtures/terminal_block.yaml --output-root build/ci-example
+kcf ci library-check --repo-root ../my-private-kicad-library
+kcf ci secret-check --repo-root ../my-private-kicad-library
+```
+
+`component-check` validates a spec, regenerates deterministic artifacts, checks for drift, and records KiCad syntax-check availability. `library-check` reruns drift checks for committed `components/*/*/component.yaml` specs. `secret-check` reuses doctor secret/configuration safety findings.

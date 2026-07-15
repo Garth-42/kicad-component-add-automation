@@ -7,10 +7,12 @@ from pathlib import Path
 
 from kcf.application.bootstrap import doctor_findings, init_private_library
 from kcf.application.workflow_actions import WorkflowActionError, answer_question, approve_release, approve_spec, reconcile_stale_approvals, reject_candidate, request_changes
+from kcf.application.release_workflow import create_job, generate_candidate
 from kcf.application.workflow_status import JsonWorkflowJobStore, format_status_table, workflow_statuses
 from kcf.domain.schema import dump_component_schema
 from kcf.domain.serialization import load_component
 from kcf.generation.artifacts import artifact_map, write_artifacts
+from kcf.infrastructure.kicad import KiCadCliAdapter
 from kcf.validation.core import validate_component
 
 
@@ -32,8 +34,28 @@ def run(argv: list[str] | None = None) -> int:
     check_p = sub.add_parser("check")
     check_p.add_argument("spec_path", type=Path)
     check_p.add_argument("--output-root", type=Path, default=Path("."))
+    ci_p = sub.add_parser("ci")
+    ci_sub = ci_p.add_subparsers(dest="ci_command", required=True)
+    ci_component_p = ci_sub.add_parser("component-check")
+    ci_component_p.add_argument("spec_path", type=Path)
+    ci_component_p.add_argument("--output-root", type=Path, default=Path("."))
+    ci_library_p = ci_sub.add_parser("library-check")
+    ci_library_p.add_argument("--repo-root", type=Path, default=Path("."))
+    ci_secret_p = ci_sub.add_parser("secret-check")
+    ci_secret_p.add_argument("--repo-root", type=Path, default=Path("."))
     jobs_p = sub.add_parser("jobs")
     jobs_sub = jobs_p.add_subparsers(dest="jobs_command", required=True)
+    create_p = jobs_sub.add_parser("create")
+    create_p.add_argument("spec_path", type=Path)
+    create_p.add_argument("--repo-root", type=Path, default=Path("."))
+    create_p.add_argument("--job-id")
+    generate_p = jobs_sub.add_parser("generate-candidate")
+    generate_p.add_argument("job_id")
+    generate_p.add_argument("spec_path", type=Path)
+    generate_p.add_argument("--repo-root", type=Path, default=Path("."))
+    generate_p.add_argument("--output-root", type=Path)
+    generate_p.add_argument("--actor", default="kcf")
+    generate_p.add_argument("--commit", action="store_true")
     status_p = jobs_sub.add_parser("status")
     status_p.add_argument("job_id", nargs="?")
     status_p.add_argument("--repo-root", type=Path, default=Path("."))
@@ -75,6 +97,8 @@ def run(argv: list[str] | None = None) -> int:
         print("KCF doctor")
         print(f"KiCad CLI: {shutil.which('kicad-cli') or 'not found'}")
         findings = doctor_findings(args.repo_root)
+        for check in KiCadCliAdapter().doctor_checks():
+            print(f"{check.status}: {check.name}: {check.message}")
         for finding in findings:
             print(f"{finding.severity}: {finding.message}")
         return 1 if any(finding.severity == "error" for finding in findings) else 0
@@ -122,6 +146,43 @@ def run(argv: list[str] | None = None) -> int:
             print("\n".join(mismatches))
             return 1
         print("passed")
+        return 0
+    if args.command == "ci" and args.ci_command == "component-check":
+        rc = run(["validate", str(args.spec_path)])
+        if rc != 0:
+            return rc
+        output_root = args.output_root
+        write_artifacts(load_component(args.spec_path), output_root)
+        rc = run(["check", str(args.spec_path), "--output-root", str(output_root)])
+        for check in KiCadCliAdapter().syntax_checks([path for path in output_root.rglob("*.kicad_*")]):
+            print(f"{check.status}: {check.name}: {check.message}")
+        return rc
+    if args.command == "ci" and args.ci_command == "library-check":
+        specs = sorted(args.repo_root.glob("components/*/*/component.yaml"))
+        failed = 0
+        for spec_path in specs:
+            failed += run(["check", str(spec_path), "--output-root", str(args.repo_root)]) != 0
+        print(f"checked {len(specs)} component specification(s)")
+        return 1 if failed else 0
+    if args.command == "ci" and args.ci_command == "secret-check":
+        findings = doctor_findings(args.repo_root)
+        for finding in findings:
+            print(f"{finding.severity}: {finding.message}")
+        return 1 if any(finding.severity == "error" for finding in findings) else 0
+    if args.command == "jobs" and args.jobs_command == "create":
+        job = create_job(JsonWorkflowJobStore(args.repo_root), args.spec_path, args.job_id)
+        print(json.dumps(job.to_dict(), indent=2))
+        return 0
+    if args.command == "jobs" and args.jobs_command == "generate-candidate":
+        try:
+            job, git_result = generate_candidate(JsonWorkflowJobStore(args.repo_root), args.job_id, args.spec_path, args.output_root or args.repo_root, args.actor, args.commit)
+        except Exception as exc:
+            print(f"error: {exc}")
+            return 1
+        payload = job.to_dict()
+        if git_result is not None:
+            payload["git"] = {"branch": git_result.branch, "commit": git_result.commit, "staged_paths": git_result.staged_paths}
+        print(json.dumps(payload, indent=2))
         return 0
     if args.command == "jobs" and args.jobs_command == "status":
         statuses = workflow_statuses(JsonWorkflowJobStore(args.repo_root), args.job_id)
